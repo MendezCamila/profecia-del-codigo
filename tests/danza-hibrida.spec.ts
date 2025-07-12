@@ -292,16 +292,45 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
     try {
       console.log(`🔄 Intentando usar selector para elegir Siglo ${siglo}...`);
       
-      // Buscar el selector de siglos (podría ser un dropdown, combo, tabs, etc.)
+      // Buscar específicamente el selector de filtrado por siglos
+      const selectorFiltroSiglo = page.locator('select').filter({ 
+        has: page.locator('option[value="XIV"], option[value="XV"], option[value="XVI"]') 
+      }).first();
+      
+      if (await selectorFiltroSiglo.count() > 0) {
+        console.log('✅ Selector de filtro por siglos encontrado');
+        
+        // Verificar si tiene la opción del siglo que buscamos
+        const opcionesDisponibles = await selectorFiltroSiglo.locator('option').allTextContents();
+        console.log(`📋 Opciones disponibles: ${opcionesDisponibles.join(', ')}`);
+        
+        // Seleccionar directamente por valor
+        await selectorFiltroSiglo.selectOption(siglo);
+        console.log(`✅ Seleccionado valor "${siglo}" en filtro de siglos`);
+        await page.waitForTimeout(1500);
+        
+        // Verificar que ahora está visible el siglo correspondiente
+        const sigloElement = page.getByText(`Siglo ${siglo}`, { exact: true });
+        if (await sigloElement.count() > 0) {
+          console.log(`✅ Verificado: Siglo ${siglo} ahora está visible`);
+          return true;
+        } else {
+          console.log(`⚠️ No se pudo verificar que el Siglo ${siglo} esté visible después del filtrado`);
+        }
+        
+        return true;
+      }
+      
+      // Como alternativa, probar con otros selectores si el filtro específico no funciona
       const posiblesSelectores = [
-        page.locator('select, [role="listbox"], [role="combobox"]').first(), // Dropdowns comunes
+        page.locator('select').first(), // Primer select (probablemente el filtro)
         page.locator('nav, .tabs, .navigation, .menu').first(), // Navegación/tabs
         page.locator('[data-testid="selector-siglos"]').first() // Si tiene un atributo data específico
       ];
       
       for (const selector of posiblesSelectores) {
         if (await selector.count() > 0) {
-          console.log('✅ Selector de siglos encontrado');
+          console.log('✅ Selector alternativo encontrado');
           
           // Depende del tipo de selector, la interacción será diferente
           const elementHandle = await selector.elementHandle();
@@ -311,9 +340,18 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
             
             if (isSelect) {
               // Si es un <select> estándar
-              await selector.selectOption({ label: `Siglo ${siglo}` });
-              console.log(`✅ Seleccionado Siglo ${siglo} en dropdown`);
-              await page.waitForTimeout(1000);
+              // Primero verificar si tiene la opción que necesitamos
+              const opciones = await selector.locator('option').allInnerTexts();
+              console.log(`📋 Opciones disponibles: ${opciones.join(', ')}`);
+              
+              if (opciones.some(opcion => opcion.includes(siglo))) {
+                await selector.selectOption({ value: siglo });
+                console.log(`✅ Seleccionado valor "${siglo}" en select`);
+              } else {
+                console.log(`⚠️ No se encontró opción con siglo ${siglo} en el selector`);
+              }
+              
+              await page.waitForTimeout(1500);
               return true;
             } else {
               // Si es otro tipo de control interactivo (tabs, botones, etc.)
@@ -322,7 +360,7 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
               if (await opcionSiglo.count() > 0) {
                 await opcionSiglo.click();
                 console.log(`✅ Clic en opción Siglo ${siglo}`);
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(1500);
                 return true;
               }
             }
@@ -341,6 +379,13 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
   async function focusManuscritoSeccion(siglo: string): Promise<boolean> {
     console.log(`🔍 Buscando específicamente el Siglo ${siglo}...`);
     
+    // Mapeo de siglos a títulos de manuscritos
+    const manuscritosPorSiglo: Record<string, string[]> = {
+      'XIV': ['Codex Aureus de Echternach', 'Codex Aureus'],
+      'XV': ['Libro de Kells', 'Book of Kells'],
+      'XVI': ['Codex Seraphinianus', 'Codex']
+    };
+    
     // En caso de que estemos en otro siglo, vamos a forzar un enfoque explícito en el siglo que buscamos
     try {
       // Primero limpiar cualquier diálogo o popup que pudiera estar abierto
@@ -351,36 +396,60 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
         // Ignorar errores si no hay dialogo abierto
       }
       
-      // NUEVA ESTRATEGIA: Intentar usar el selector de siglos primero
+      // ESTRATEGIA 0: Filtrar usando el selector de siglos
+      console.log(`Intentando filtrar por Siglo ${siglo} usando el selector...`);
       const selectorUsado = await usarSelectorSiglos(siglo);
       if (selectorUsado) {
-        // Si se usó el selector correctamente, verificamos que el siglo esté visible
-        const sigloElement = page.getByText(`Siglo ${siglo}`, { exact: true });
-        if (await sigloElement.count() > 0 && await sigloElement.isVisible()) {
-          console.log(`✅ Confirmado que el Siglo ${siglo} está visible después de usar el selector`);
+        console.log(`✅ Filtrado por Siglo ${siglo} completado`);
+        await page.waitForTimeout(1000);
+      }
+      
+      // ESTRATEGIA 1: Buscar por el título del manuscrito correspondiente al siglo
+      const titulosPosibles = manuscritosPorSiglo[siglo] || [];
+      for (const titulo of titulosPosibles) {
+        const tituloElement = page.getByText(titulo, { exact: false });
+        if (await tituloElement.count() > 0) {
+          console.log(`✅ Manuscrito "${titulo}" (Siglo ${siglo}) encontrado`);
+          
+          // Buscar el contenedor padre que tiene toda la tarjeta del manuscrito
+          const tarjeta = page.locator('div.group').filter({ hasText: titulo }).first();
+          if (await tarjeta.count() > 0) {
+            console.log(`✅ Tarjeta de manuscrito localizada`);
+            await tarjeta.scrollIntoViewIfNeeded();
+            await page.waitForTimeout(300);
+            await tarjeta.click({ position: { x: 20, y: 20 } });
+            await page.waitForTimeout(500);
+            return true;
+          }
+          
+          // Si no encontramos la tarjeta, hacemos clic directamente en el título
+          await tituloElement.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(300);
+          await tituloElement.click({ force: true });
+          await page.waitForTimeout(500);
           return true;
         }
       }
       
-      // Estrategia 1: Usar getByText con exact=true para encontrar exactamente el siglo que buscamos
+      // ESTRATEGIA 2: Buscar directamente por el texto "Siglo X"
       const sigloElement = page.getByText(`Siglo ${siglo}`, { exact: true });
       if (await sigloElement.count() > 0) {
-        console.log(`✅ Siglo ${siglo} encontrado - usando estrategia 1`);
-        // Asegurarnos de hacer scroll hacia el elemento para que sea visible
+        console.log(`✅ Etiqueta "Siglo ${siglo}" encontrada`);
+        
+        // Buscar el contenedor padre
+        const contenedor = page.locator(`div:has-text("Siglo ${siglo}")`).first();
+        if (await contenedor.count() > 0) {
+          await contenedor.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(300);
+          await contenedor.click();
+          await page.waitForTimeout(500);
+          return true;
+        }
+        
+        // Si no encontramos el contenedor, hacemos clic en la etiqueta de siglo
         await sigloElement.scrollIntoViewIfNeeded();
         await page.waitForTimeout(300);
         await sigloElement.click({ force: true });
-        await page.waitForTimeout(500);
-        return true;
-      }
-      
-      // Estrategia 2: Buscar por contenido textual en div/sección
-      const elemento = page.locator(`div:has-text("Siglo ${siglo}")`).first();
-      if (await elemento.count() > 0) {
-        console.log(`✅ Siglo ${siglo} encontrado - usando estrategia 2`);
-        await elemento.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(300);
-        await elemento.click({ force: true });
         await page.waitForTimeout(500);
         return true;
       }
