@@ -1,0 +1,29 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Ejecutar Test Danza Corregida",
+			"type": "shell",
+			"command": "npx playwright test danza-corregida.spec.ts --project=chromium",
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Ejecutar Test Danza Secuencial",
+			"type": "shell",
+			"command": "npx playwright test danza-secuencial.spec.ts --project=chromium",
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Ejecutar Test Danza Simple",
+			"type": "shell",
+			"command": "npx playwright test danza-simple.spec.ts --project=chromium --headed",
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
