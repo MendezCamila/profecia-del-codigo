@@ -873,6 +873,212 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
   
   if (todosCompletados) {
     console.log('\n✅ PROCESO COMPLETADO EXITOSAMENTE');
+    
+    // PASO 4: NAVEGAR A LA SEGUNDA DIMENSIÓN
+    console.log('\n🔄 INICIANDO NAVEGACIÓN A LA SEGUNDA DIMENSIÓN');
+    
+    /**
+     * Función para seleccionar una opción específica en el filtro de siglos
+     */
+    async function seleccionarFiltroSiglos(opcion: string): Promise<boolean> {
+      try {
+        console.log(`🔍 Buscando selector de filtro para seleccionar "${opcion}"...`);
+        
+        // Buscar específicamente el selector de filtrado por siglos (el primero con la etiqueta "Filtrar por Siglo")
+        const labelFiltro = page.getByText('Filtrar por Siglo', { exact: true });
+        
+        if (await labelFiltro.count() === 0) {
+          console.log('⚠️ No se encontró la etiqueta "Filtrar por Siglo"');
+          
+          // Intentar encontrar cualquier selector como alternativa
+          const selectorFiltro = page.locator('select').first();
+          if (await selectorFiltro.count() === 0) {
+            console.log('⚠️ No se encontró ningún selector');
+            return false;
+          }
+          
+          // Seleccionar la opción
+          console.log(`🖱️ Intentando seleccionar opción "${opcion}" en el primer selector encontrado`);
+          await selectorFiltro.selectOption(opcion);
+          await page.waitForTimeout(2000);
+          return true;
+        }
+        
+        // Encontrar el select asociado a esta etiqueta (generalmente es el siguiente elemento o está dentro del mismo div)
+        const contenedorFiltro = page.locator('div').filter({ has: labelFiltro }).first();
+        const selectorFiltro = contenedorFiltro.locator('select').first();
+        
+        if (await selectorFiltro.count() === 0) {
+          console.log('⚠️ No se encontró el selector dentro del contenedor del filtro');
+          return false;
+        }
+        
+        // Verificar si ya tiene la opción seleccionada
+        const opcionActual = await selectorFiltro.evaluate(el => (el as HTMLSelectElement).value);
+        if (opcionActual === opcion) {
+          console.log(`✅ La opción "${opcion}" ya está seleccionada`);
+          return true;
+        }
+        
+        // Seleccionar la opción deseada
+        console.log(`🖱️ Seleccionando opción "${opcion}" en el filtro...`);
+        await selectorFiltro.selectOption(opcion);
+        
+        // Esperar a que la interfaz se actualice
+        console.log('⏳ Esperando a que la interfaz se actualice...');
+        await page.waitForTimeout(2000);
+        
+        // Verificar que la opción se seleccionó correctamente
+        const opcionActualizada = await selectorFiltro.evaluate(el => (el as HTMLSelectElement).value);
+        if (opcionActualizada === opcion) {
+          console.log(`✅ Opción "${opcion}" seleccionada correctamente`);
+          return true;
+        } else {
+          console.log(`⚠️ No se pudo confirmar que la opción "${opcion}" se haya seleccionado`);
+          return false;
+        }
+      } catch (error) {
+        console.log(`❌ Error al seleccionar el filtro: ${error.message}`);
+        return false;
+      }
+    }
+    
+    /**
+     * Función para navegar a una página específica y verificar su carga
+     */
+    async function navegarAPagina(numeroPagina: number): Promise<boolean> {
+      try {
+        console.log(`🔍 Buscando botón para navegar a la página ${numeroPagina}...`);
+        
+        // Buscar el botón de la página específica
+        const botonPagina = page.getByRole('button', { name: String(numeroPagina) }).first();
+        
+        if (await botonPagina.count() === 0) {
+          console.log(`⚠️ No se encontró el botón para la página ${numeroPagina}`);
+          return false;
+        }
+        
+        // Verificar si el botón ya está activo (tiene la clase de fondo que indica selección)
+        const clasesBoton = await botonPagina.getAttribute('class') || '';
+        if (clasesBoton.includes('bg-sherpa-primary')) {
+          console.log(`✅ Ya estamos en la página ${numeroPagina}`);
+          return true;
+        }
+        
+        // Hacer clic en el botón de la página
+        console.log(`🖱️ Haciendo clic en el botón de la página ${numeroPagina}...`);
+        await botonPagina.click();
+        
+        // Esperar a que la página cargue completamente
+        console.log('⏳ Esperando a que la página cargue completamente...');
+        
+        try {
+          // Esperar a que la red esté inactiva y luego esperar a que el DOM esté listo
+          await page.waitForLoadState('networkidle', { timeout: 30000 });
+          await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+          
+          // Espera adicional para asegurar que elementos dinámicos estén cargados
+          await page.waitForTimeout(3000);
+          
+          // Verificar que estamos realmente en la nueva página (el botón ahora tiene fondo)
+          const botonPaginaActualizado = page.getByRole('button', { name: String(numeroPagina) }).first();
+          
+          if (await botonPaginaActualizado.count() > 0) {
+            const clasesBotonActualizado = await botonPaginaActualizado.getAttribute('class') || '';
+            
+            if (clasesBotonActualizado.includes('bg-sherpa-primary') || 
+                clasesBotonActualizado.includes('font-medium')) {
+              console.log(`✅ Navegación exitosa a la página ${numeroPagina}`);
+              
+              // Verificar que hay contenido en la página
+              const hayContenido = await page.locator('h3, div.card, div.group').count() > 0;
+              if (hayContenido) {
+                return true;
+              } else {
+                console.log(`⚠️ La página ${numeroPagina} parece estar vacía`);
+                return false;
+              }
+            }
+          }
+          
+          console.log(`⚠️ No se pudo verificar la navegación a la página ${numeroPagina}`);
+          return false;
+        } catch (timeoutError) {
+          console.log(`⚠️ Timeout esperando carga de la página ${numeroPagina}: ${timeoutError.message}`);
+          return false;
+        }
+      } catch (error) {
+        console.log(`❌ Error al navegar a la página ${numeroPagina}: ${error.message}`);
+        return false;
+      }
+    }
+    
+    // Paso 1: Seleccionar "Todos" en el filtro de siglos
+    console.log('\n📋 Paso 1: Seleccionando "Todos" en el filtro de siglos...');
+    const filtroSeleccionado = await seleccionarFiltroSiglos('Todos');
+    
+    if (!filtroSeleccionado) {
+      console.log('⚠️ No se pudo seleccionar la opción "Todos" en el filtro. Intentando continuar de todas formas...');
+    } else {
+      console.log('✅ Filtro configurado para mostrar todos los manuscritos');
+    }
+    
+    // Paso 2: Navegar a la segunda página
+    console.log('\n📄 Paso 2: Navegando a la página 2...');
+    
+    // Intentar navegar a la página 2 con un número limitado de intentos
+    let navegacionExitosa = false;
+    let intentosNavegacion = 0;
+    const maxIntentosNavegacion = 3;
+    
+    while (!navegacionExitosa && intentosNavegacion < maxIntentosNavegacion) {
+      intentosNavegacion++;
+      if (intentosNavegacion > 1) {
+        console.log(`Intento ${intentosNavegacion}/${maxIntentosNavegacion} para navegar a la página 2...`);
+      }
+      
+      navegacionExitosa = await navegarAPagina(2);
+      
+      if (!navegacionExitosa && intentosNavegacion < maxIntentosNavegacion) {
+        console.log('Reintentando navegación en 1 segundo...');
+        await page.waitForTimeout(1000);
+      }
+    }
+    
+    if (navegacionExitosa) {
+      console.log('\n🎉 Portal a la segunda dimensión abierto exitosamente');
+      
+      // Identificar manuscritos en la segunda página
+      console.log('\n🔍 Identificando manuscritos en la segunda dimensión...');
+      
+      try {
+        // Buscar títulos de manuscritos
+        const titulosManuscritos = await page.locator('h3').allTextContents();
+        console.log(`📚 Manuscritos encontrados: ${titulosManuscritos.length}`);
+        
+        for (const titulo of titulosManuscritos) {
+          console.log(`- ${titulo}`);
+        }
+        
+        // Verificar si hay botones de documentación
+        const botonesDocumentacion = page.getByText('Ver Documentación');
+        const cantidadBotones = await botonesDocumentacion.count();
+        
+        if (cantidadBotones > 0) {
+          console.log(`✅ Se encontraron ${cantidadBotones} botones de documentación`);
+        } else {
+          console.log('⚠️ No se encontraron botones de documentación');
+        }
+        
+        // Capturar evidencia de la navegación exitosa
+        await page.screenshot({ path: 'segunda-dimension.png' });
+        console.log('📸 Captura de pantalla guardada como "segunda-dimension.png"');
+      } catch (error) {
+        console.log(`❌ Error al analizar manuscritos en la segunda dimensión: ${error.message}`);
+      }
+    } else {
+      console.log('❌ No se pudo acceder a la segunda dimensión después de varios intentos');
+    }
   } else {
     console.log('\n⚠️ PROCESO COMPLETADO CON ADVERTENCIAS');
   }
