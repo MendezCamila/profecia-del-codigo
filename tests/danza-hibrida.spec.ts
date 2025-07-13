@@ -815,8 +815,10 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
               await downloadXVI.saveAs(pdfPathXVI);
               console.log(`- PDF descargado: ${pdfPathXVI}`);
               
-              // No es necesario extraer código del último manuscrito
-              console.log('- No se requiere código del último manuscrito');
+              // Extraer código utilizando el sistema avanzado
+              console.log('- Intentando extraer código del PDF...');
+              codigos['XVI'] = await extractor.extractCode(pdfPathXVI, 'XVI');
+              console.log(`✅ Código para Siglo XVI: ${codigos['XVI']}`);
               siglosProcesados['XVI'] = true;
             } catch (error) {
               console.log(`⚠️ Error al desbloquear o descargar el PDF: ${error.message}`);
@@ -843,7 +845,6 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
           const pdfPathXVI = path.join(downloadPath, 'siglo-XVI.pdf');
           await downloadXVI.saveAs(pdfPathXVI);
           console.log(`- PDF descargado: ${pdfPathXVI}`);
-          console.log('- No se requiere código del último manuscrito');
           siglosProcesados['XVI'] = true;
         } else {
           console.log('⚠️ No se encontró forma de obtener el PDF del Siglo XVI');
@@ -864,11 +865,7 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
   // RESUMEN FINAL
   console.log('\n📊 RESUMEN DE CÓDIGOS:');
   for (const siglo of siglosOrdenados) {
-    if (siglo === 'XVI') {
-      console.log(`Siglo ${siglo}: No necesario (último manuscrito)`);
-    } else {
-      console.log(`Siglo ${siglo}: ${codigos[siglo]}`);
-    }
+    console.log(`Siglo ${siglo}: ${codigos[siglo]}`);
   }
   
   if (todosCompletados) {
@@ -1104,14 +1101,22 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
     try {
       console.log(`🔍 Buscando manuscrito arcano del Siglo ${siglo}...`);
       
-      // En lugar de intentar filtrar, nos centramos directamente en buscar el manuscrito
+      // Usar el selector de filtro por siglos como en la primera página
+      console.log(`Intentando filtrar por Siglo ${siglo} usando el selector...`);
+      const selectorUsado = await usarSelectorSiglos(siglo);
       
-      // Buscar el texto específico del siglo
-      const textoSiglo = page.locator('span').getByText(`Siglo ${siglo}`, { exact: true });
-      
-      if (await textoSiglo.count() === 0) {
-        console.log(`⚠️ No se encontró manuscrito del Siglo ${siglo}`);
-        return false;
+      if (selectorUsado) {
+        console.log(`✅ Filtrado por Siglo ${siglo} completado`);
+        await page.waitForTimeout(1000);
+      } else {
+        // Si el selector no funciona, buscar directamente como antes
+        // Buscar el texto específico del siglo
+        const textoSiglo = page.locator('span').getByText(`Siglo ${siglo}`, { exact: true });
+        
+        if (await textoSiglo.count() === 0) {
+          console.log(`⚠️ No se encontró manuscrito del Siglo ${siglo}`);
+          return false;
+        }
       }
       
       console.log(`✅ Encontrado manuscrito del Siglo ${siglo}`);
@@ -1142,7 +1147,10 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
         return false;
       }
       
-      console.log(`✅ Mensaje del guardián para Siglo ${siglo}: "${mensajeAlerta}"`);
+      // Mostrar solo una parte del mensaje del guardián
+      const mensajeCorto = mensajeAlerta.length > 100 ? 
+        mensajeAlerta.substring(0, 100) + "..." : mensajeAlerta;
+      console.log(`✅ Mensaje del guardián para Siglo ${siglo}: "${mensajeCorto}"`);
       
       // Aquí se implementará la lógica para procesar el desafío basado en el mensaje
       const desafioResuelto = await resolverDesafioArcano(page, siglo, mensajeAlerta);
@@ -1218,10 +1226,14 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
           // Intentar obtener el texto del modal
           const textoModal = await modal.textContent() || '';
           
+          // Mostrar solo una parte del mensaje (más corta)
+          const mensajeCorto = textoModal.length > 100 ? 
+            textoModal.substring(0, 100) + "..." : textoModal;
+          
           // Cerrar el modal si es posible
           await cerrarModal(page, modal);
           
-          return textoModal;
+          return textoModal; // Devolvemos el texto completo para procesamiento interno
         }
       }
       
@@ -1657,6 +1669,7 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
         
         // Buscar botón X para cerrar el modal
         const botonCerrarModal = modal.locator('button, svg.close-icon, .btn-close').first();
+        
         
         if (await botonCerrarModal.count() > 0) {
           console.log('✅ Botón para cerrar modal encontrado');
