@@ -5,19 +5,17 @@ import pdfParse from 'pdf-parse';
 import axios from 'axios';
 // Importar la función para obtener desafíos de la API
 import { obtenerDesafioAPI } from './api-client';
+// Importar configuraciones, constantes y utilidades
+import { APP_URLS, CREDENTIALS, TIMEOUTS, FILE_LIMITS, BACKUP_CODES, DEFAULT_VALUES, PATHS } from './config';
+import { REGEX_PATTERNS, DOM_SELECTORS, GUARDIAN_MESSAGES, MANUSCRIPT_TITLES } from './constants';
+import { getPdfPath, extractCodeFromText, closeModal, getBackupCode, truncateMessage } from './utils';
 
 /**
  * Sistema avanzado de extracción de códigos con múltiples estrategias
  */
 class CodeExtractor {
-  // Códigos de respaldo conocidos (confirmados por las pruebas)
-  private backupCodes = {
-    'XIV': 'AUREUS1350',
-    'XV': 'DIAZEPAM850',
-    'XVI': 'SERAPH1520',
-    'XVII': 'NECRONOMICON1317', // Código alfanumérico para Siglo XVII
-    'XVIII': 'MALLEUS1692'      // Código alfanumérico para Siglo XVIII
-  };
+  // Códigos de respaldo conocidos (importados desde config)
+  private backupCodes = BACKUP_CODES;
   
   // Histórico de códigos encontrados (persistente entre ejecuciones)
   private codeHistory: Record<string, string[]> = {};
@@ -288,11 +286,11 @@ class CodeExtractor {
 test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
   test.setTimeout(120000); // 2 minutos para toda la prueba
   
-  // Datos de acceso
-  const URL_LOGIN = 'https://pruebatecnica-sherpa-production.up.railway.app/login';
-  const URL_PORTAL = 'https://pruebatecnica-sherpa-production.up.railway.app/portal';
-  const EMAIL = 'monje@sherpa.local';
-  const PASSWORD = 'cript@123';
+  // Datos de acceso desde configuración
+  const URL_LOGIN = APP_URLS.LOGIN;
+  const URL_PORTAL = APP_URLS.PORTAL;
+  const EMAIL = CREDENTIALS.EMAIL;
+  const PASSWORD = CREDENTIALS.PASSWORD;
   
   // Orden cronológico
   const siglosOrdenados = ['XIV', 'XV', 'XVI'];
@@ -315,7 +313,7 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
   // Navegar a la página de login con opciones robustas
   await page.goto(URL_LOGIN, { 
     waitUntil: 'networkidle',
-    timeout: 30000
+    timeout: TIMEOUTS.PAGE_LOAD
   });
   
   // Completar credenciales y asegurarse de que los campos estén visibles
@@ -1405,10 +1403,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       // Si no encontramos un modal, simular una respuesta basada en el siglo
       console.log('⚠️ No se detectó alerta ni modal, simulando respuesta basada en el siglo');
       
-      const mensajesSimulados = {
-        'XVII': 'Soy el guardián del Necronomicón. Para desbloquear este manuscrito, necesitas resolver un desafío. Usa el código NECROS666 para obtener más información.',
-        'XVIII': 'Soy el guardián del Manuscrito Voynich. Para desbloquear este manuscrito, necesitas resolver un desafío. Usa el código VOYNICH123 para obtener más información.'
-      };
+      // Usar mensajes simulados desde constantes
+      const mensajesSimulados = GUARDIAN_MESSAGES;
       
       console.log(`📜 Usando mensaje simulado: "${mensajesSimulados[sigloActual]}"`);
       
@@ -1423,49 +1419,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
    * Función para cerrar un modal o diálogo
    */
   async function cerrarModal(page: Page, modal: Locator): Promise<boolean> {
-    try {
-      // Buscar botones de cierre comunes
-      const posiblesBotonesCierre = [
-        modal.locator('button.close, button[aria-label="Close"]').first(),
-        modal.locator('svg.close-icon, .close-button').first(),
-        modal.locator('[data-dismiss="modal"]').first(),
-        modal.locator('button').first() // Último recurso: primer botón
-      ];
-      
-      // Intentar cada posible botón de cierre
-      for (const boton of posiblesBotonesCierre) {
-        if (await boton.count() > 0) {
-          console.log('✅ Botón de cierre encontrado');
-          await boton.click();
-          await page.waitForTimeout(500);
-          
-          // Verificar si el modal ya no está visible
-          if (await modal.count() === 0 || !(await modal.isVisible())) {
-            console.log('✅ Modal cerrado exitosamente');
-            return true;
-          }
-        }
-      }
-      
-      // Si no encontramos un botón específico, buscar X en la esquina superior derecha
-      const closeX = modal.locator('.absolute.top-0.right-0, .top-right').first();
-      if (await closeX.count() > 0) {
-        console.log('✅ Botón X encontrado en la esquina superior');
-        await closeX.click();
-        await page.waitForTimeout(500);
-        return true;
-      }
-      
-      // Si todo lo anterior falla, presionar ESC
-      console.log('⚠️ No se encontró botón de cierre, intentando presionar ESC');
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
-      
-      return !(await modal.isVisible());
-    } catch (error) {
-      console.log(`❌ Error al cerrar modal: ${error.message}`);
-      return false;
-    }
+    // Usar la función de utilidad para cerrar el modal
+    return await closeModal(page, modal);
   }
   
   /**
@@ -1476,9 +1431,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
     try {
       console.log(`🧩 Iniciando resolución de desafío para Siglo ${siglo}...`);
       
-      // Mostrar versión corta del mensaje para el log
-      const mensajeCorto = mensajeGuardian.length > 100 ? 
-        mensajeGuardian.substring(0, 100) + "..." : mensajeGuardian;
+      // Mostrar versión corta del mensaje para el log usando función de utilidad
+      const mensajeCorto = truncateMessage(mensajeGuardian);
       console.log(`📜 Mensaje del guardián: "${mensajeCorto}"`);
       
       // Caso especial para el Siglo XVIII - verificar si tenemos el código del Siglo XVII
@@ -1738,7 +1692,7 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       // Si todavía no tenemos código, usar respaldo como último recurso
       if (!codigoFinal || codigoFinal === 'CODIGO_NO_ENCONTRADO') {
         console.log(`⚠️ No se pudo determinar el código, usando respaldo...`);
-        codigoFinal = siglo === 'XVII' ? 'NECRONOMICON1317' : siglo === 'XVIII' ? 'MALLEUS1692' : 'CODIGO123';
+        codigoFinal = siglo === 'XVII' ? BACKUP_CODES.XVII : siglo === 'XVIII' ? BACKUP_CODES.XVIII : DEFAULT_VALUES.DEFAULT_CODE;
       }
       
       console.log(`🔑 Código final a usar: ${codigoFinal}`);
@@ -1782,16 +1736,16 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
         return titulosCapturados[siglo];
       }
       
-      // Como respaldo, intentar extraer del mensaje
+      // Como respaldo, intentar extraer del mensaje usando títulos predefinidos
       if (mensaje.includes('Malleus')) {
-        console.log('📚 Título extraído del mensaje: "Malleus Maleficarum"');
-        return 'Malleus Maleficarum';
+        console.log(`📚 Título extraído del mensaje: "${MANUSCRIPT_TITLES.XVIII}"`);
+        return MANUSCRIPT_TITLES.XVIII;
       } else if (mensaje.includes('Necronom')) {
-        console.log('📚 Título extraído del mensaje: "Necronomicon"');
-        return 'Necronomicon';
+        console.log(`📚 Título extraído del mensaje: "${MANUSCRIPT_TITLES.XVII}"`);
+        return MANUSCRIPT_TITLES.XVII;
       } else if (mensaje.includes('Voynich')) {
-        console.log('📚 Título extraído del mensaje: "Manuscrito Voynich"');
-        return 'Manuscrito Voynich';
+        console.log(`📚 Título extraído del mensaje: "${MANUSCRIPT_TITLES.VOYNICH}"`);
+        return MANUSCRIPT_TITLES.VOYNICH;
       }
       
       // Si no se encuentra nada, usar un título genérico basado en el siglo
@@ -1858,8 +1812,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       // Si se proporciona el siglo y tenemos un título capturado para este siglo, usarlo
       const tituloFinal = (siglo && titulosCapturados[siglo]) ? titulosCapturados[siglo] : bookTitle;
       
-      // URL de la API con query parameters
-      const apiUrl = 'https://backend-production-9d875.up.railway.app/api/cipher/challenge';
+      // URL de la API desde configuración
+      const apiUrl = APP_URLS.API_CHALLENGE;
       
       console.log(`🔗 Conectando con la API directamente en: ${apiUrl}`);
       console.log(`📡 Llamando API con bookTitle="${tituloFinal}" y unlockCode="${unlockCode}"...`);
@@ -2067,12 +2021,12 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       await page.waitForTimeout(2000);
       
       // Comprobar si hay un modal visible
-      const modal = page.locator('div[role="dialog"]').first();
+      const modal = page.locator(DOM_SELECTORS.MODAL).first();
       if (await modal.count() > 0 && await modal.isVisible()) {
         console.log('🔎 Modal de confirmación encontrado, intentando cerrarlo...');
         
-        // Buscar botón X para cerrar el modal
-        const botonCerrarModal = modal.locator('button, svg.close-icon, .btn-close').first();
+        // Buscar botón X para cerrar el modal usando selector predefinido
+        const botonCerrarModal = modal.locator(DOM_SELECTORS.CLOSE_BUTTON).first();
         
         
         if (await botonCerrarModal.count() > 0) {
@@ -2109,19 +2063,13 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
         if (siglo === 'XVII') {
           console.log('📥 Descargando PDF del Siglo XVII para extraer código...');
           
-          // Configurar manejo de descargas
-          const downloadPath = path.join(__dirname, 'downloads');
-          if (!fs.existsSync(downloadPath)) {
-            fs.mkdirSync(downloadPath, { recursive: true });
-          }
+          // Obtener la ruta del PDF usando la función de utilidad
+          const pdfPath = getPdfPath(siglo, __dirname);
           
           // Esperar a que comience la descarga al hacer clic en el botón
-          const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+          const downloadPromise = page.waitForEvent('download', { timeout: TIMEOUTS.DOWNLOAD });
           await botonDescarga.click();
           const download = await downloadPromise;
-          
-          // Guardar el archivo descargado
-          const pdfPath = path.join(downloadPath, `siglo-${siglo}.pdf`);
           await download.saveAs(pdfPath);
           console.log(`✅ PDF descargado: ${pdfPath}`);
           
@@ -2146,11 +2094,11 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
               const buffer = fs.readFileSync(pdfPath);
               const fileContent = buffer.toString('utf-8', 0, Math.min(buffer.length, 30000));
               
-              // Buscar patrones alfanuméricos para el Necronomicon (Siglo XVII)
+              // Usar patrones predefinidos para el Necronomicon (Siglo XVII)
               const patronesNecro = [
-                /\b(NECRONOMICON\d{4})\b/i,
-                /\b(NECRO\d{4})\b/i,
-                /\b([A-Z]{5,}\d{3,})\b/i // Patrón general para palabras mayúsculas seguidas de números
+                REGEX_PATTERNS.NECRONOMICON,
+                REGEX_PATTERNS.NECRO_SHORT,
+                REGEX_PATTERNS.ALFANUMERIC_CODE
               ];
               
               for (const patron of patronesNecro) {
@@ -2217,24 +2165,24 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
             
             if (siglo === 'XVIII') {
               patronesCodigo = [
-                /\b([A-Z]+\d{4})\b/,    // Formato alfanumérico (como MALLEUS1692)
-                /\b(MALLEUS\d{4})\b/,   // Patrón específico para MALLEUS
-                /\b(\d{7})\b/,          // Cualquier código de 7 dígitos
-                /código[:\s]+(\d{7})/i, // "código: 1234567"
-                /code[:\s]+(\d{7})/i,   // "code: 1234567"
-                /clave[:\s]+(\d{7})/i   // "clave: 1234567"
+                REGEX_PATTERNS.ALFANUMERIC_CODE,    // Formato alfanumérico general
+                REGEX_PATTERNS.MALLEUS,             // Patrón específico para MALLEUS
+                REGEX_PATTERNS.NUMERIC_7_DIGITS,    // Cualquier código de 7 dígitos
+                REGEX_PATTERNS.CODE_LABEL_NUMERIC,  // "código: 1234567"
+                REGEX_PATTERNS.CODE_LABEL_ALFANUM,  // "code: XXXX"
+                REGEX_PATTERNS.CLAVE_LABEL          // "clave: XXXX"
               ];
             } else {
-              // Patrones generales para otros siglos
+              // Usar patrones desde constantes para otros siglos
               patronesCodigo = [
-                /\b([A-Z]+\d{4})\b/,    // Formato alfanumérico (como NECRONOMICON1317)
-                /\b(NECRONOMICON\d{4})\b/, // Patrón específico para NECRONOMICON
-                /\b(\d{7})\b/,            // Secuencia de 7 dígitos
-                /code[:\s]+([A-Z0-9]{4,})/i, // "code: XXXX"
-                /password[:\s]+([A-Z0-9]{4,})/i, // "password: XXXX"
-                /clave[:\s]+([A-Z0-9]{4,})/i, // "clave: XXXX"
-                /\b([A-Z]{5,}\d{3,})\b/,   // Patrón para ALPRAZOLAM741, etc.
-                /\b([A-Z0-9]{5,})\b/       // Cualquier secuencia alfanumérica
+                REGEX_PATTERNS.ALFANUMERIC_CODE,     // Formato alfanumérico general
+                REGEX_PATTERNS.NECRONOMICON,         // Patrón específico para NECRONOMICON
+                REGEX_PATTERNS.NUMERIC_7_DIGITS,     // Secuencia de 7 dígitos
+                REGEX_PATTERNS.CODE_LABEL_ALFANUM,   // "code: XXXX"
+                REGEX_PATTERNS.PASSWORD_LABEL,       // "password: XXXX"
+                REGEX_PATTERNS.CLAVE_LABEL,          // "clave: XXXX"
+                REGEX_PATTERNS.ALFANUMERIC_CODE,     // Patrón para ALPRAZOLAM741, etc.
+                REGEX_PATTERNS.ANY_ALFANUMERIC       // Cualquier secuencia alfanumérica
               ];
             }
             
