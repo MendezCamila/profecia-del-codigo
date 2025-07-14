@@ -114,8 +114,8 @@ export async function closeModal(page: Page, modal: Locator): Promise<boolean> {
     
     // Verificar si el modal sigue visible
     return !(await modal.isVisible());
-  } catch (error) {
-    console.log(`❌ Error al cerrar modal: ${error.message}`);
+  } catch (error: any) {
+    console.log(`❌ Error al cerrar modal: ${error?.message || 'Error desconocido'}`);
     return false;
   }
 }

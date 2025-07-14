@@ -141,8 +141,8 @@ class CodeExtractor {
           console.log(`✅ Código extraído con método #${i+1}: ${code}`);
           return code;
         }
-      } catch (error) {
-        console.log(`⚠️ Método #${i+1} falló: ${error.message}`);
+      } catch (error: any) {
+        console.log(`⚠️ Método #${i+1} falló: ${error?.message || 'Error desconocido'}`);
       }
     }
     
@@ -486,8 +486,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       
       console.log('⚠️ No se encontró un selector de siglos utilizable');
       return false;
-    } catch (e) {
-      console.log(`⚠️ Error al intentar usar el selector: ${e.message}`);
+    } catch (e: any) {
+      console.log(`⚠️ Error al intentar usar el selector: ${e?.message || 'Error desconocido'}`);
       return false;
     }
   }
@@ -573,8 +573,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       // Si llegamos aquí, no se encontró
       console.log(`⚠️ No se pudo encontrar el Siglo ${siglo}`);
       return false;
-    } catch (e) {
-      console.log(`⚠️ Error al buscar el Siglo ${siglo}: ${e.message}`);
+    } catch (e: any) {
+      console.log(`⚠️ Error al buscar el Siglo ${siglo}: ${e?.message || 'Error desconocido'}`);
       return false;
     }
   }
@@ -1664,7 +1664,8 @@ test('Danza de Siglos - Sistema Híbrido', async ({ page }) => {
       // Para el siglo XVIII, intentar obtener el código del siglo XVII primero
       if (siglo === 'XVIII' && codigos['XVII']) {
         console.log(`🔄 Para el siglo XVIII, usando el código extraído del PDF del siglo XVII: ${codigos['XVII']}`);
-        codigoDesbloqueo = codigos['XVII'];
+        // Comentado: No debemos sobrescribir el código generado por la búsqueda binaria
+        // codigoDesbloqueo = codigos['XVII'];
       }
       
       // Asegurar que tenemos un código válido

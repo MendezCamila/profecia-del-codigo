@@ -2,14 +2,26 @@
   "name": "profecia-del-codigo",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test",
+    "test:dance": "playwright test danza-hibrida.spec.ts --project=chromium",
+    "test:dance:headed": "playwright test danza-hibrida.spec.ts --project=chromium --headed",
+    "test:unit": "jest",
+    "test:unit:verbose": "jest --verbose",
+    "test:api": "jest --testMatch='**/__tests__/**/*.test.ts'"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
     "@playwright/test": "^1.54.1",
-    "@types/node": "^24.0.13"
+    "@testing-library/jest-dom": "^6.6.3",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.0.13",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.4.2"
   },
   "dependencies": {
     "axios": "^1.10.0",
